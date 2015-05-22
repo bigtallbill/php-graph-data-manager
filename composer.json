@@ -1,0 +1,21 @@
+{
+    "name": "bigtallbill/php-mongo-graph-model",
+    "description": "A data model for storing incremental data for graphs",
+    "require": {
+        "php": ">=5.3",
+        "doctrine/doctrine-mongo-odm-module": "0.8.*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "~4.6"
+    },
+    "authors": [
+        {
+            "name": "bigtallbill",
+            "email": "bill@bigtallbill.co.uk"
+        }
+    ],
+    "minimum-stability": "beta",
+    "autoload": {
+        "psr-0": {"Bigtallbill": "src/"}
+    }
+}
