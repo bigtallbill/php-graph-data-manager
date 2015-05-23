@@ -41,7 +41,7 @@ class GraphManager
                 $key = json_encode($result['_id']);
             }
 
-            $parsed[] = new ParsedStat($group, $key, $result['count']);
+            $parsed[] = new ParsedStat($this->window, $this->granularity, $group, $key, $result['count']);
         }
         return $parsed;
     }
@@ -55,10 +55,20 @@ class GraphManager
     public function parseSimpleKeyValue($group, $key, $value)
     {
         $parsed = array(
-            new ParsedStat($group, $key, $value)
+            new ParsedStat($this->window, $this->granularity, $group, $key, $value)
         );
 
         return $parsed;
+    }
+
+    /**
+     * @param ParsedStat[] $stats
+     */
+    public function insertMultiple($stats)
+    {
+        foreach ($stats as $stat) {
+            $this->insertStat($stat);
+        }
     }
 
     /**
@@ -71,18 +81,18 @@ class GraphManager
         $this->assertGranularityIsMoreThanWindow();
         $this->assertWindowIsDivisibleByGranularity();
 
-        $currentSegment = $this->getTimeSegment($this->granularity);
-        $timeWindow = $this->getTimeSegment($this->window);
+        $currentSegment = $this->getTimeSegment($parsedStat->getGranularity());
+        $timeWindow = $this->getTimeSegment($parsedStat->getWindow());
 
-        $humanGranularity = $this->getHumanTimeIncrement($this->granularity);
-        $humanWindow = $this->getHumanTimeIncrement($this->window);
+        $humanGranularity = $this->getHumanTimeIncrement($parsedStat->getGranularity());
+        $humanWindow = $this->getHumanTimeIncrement($parsedStat->getWindow());
 
         $this->documentManager->createQueryBuilder('Bigtallbill\MongoGraphModel\Graph')
             ->update()
             ->upsert(true)
-            ->field('granularity')->equals($this->granularity)
+            ->field('granularity')->equals($parsedStat->getGranularity())
             ->field('granularity_human')->set($humanGranularity)
-            ->field('window')->equals($this->window)
+            ->field('window')->equals($parsedStat->getWindow())
             ->field('window_human')->equals($humanWindow)
             ->field('group')->equals($parsedStat->getGroup())
             ->field('key')->equals($parsedStat->getKey())

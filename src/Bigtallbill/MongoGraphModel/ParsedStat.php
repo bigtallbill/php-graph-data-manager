@@ -10,15 +10,24 @@ namespace Bigtallbill\MongoGraphModel;
  */
 class ParsedStat
 {
+    private $granularity;
+    private $window;
     private $group;
     private $key;
     private $value;
 
-    public function __construct($group, $key, $value)
+    public function __construct($window, $granularity, $group, $key, $value)
     {
         $this->group = $group;
         $this->key = $key;
         $this->value = $value;
+        $this->window = $window;
+        $this->granularity = $granularity;
+    }
+
+    public function getUniqueHash()
+    {
+        return md5($this->window . $this->granularity . $this->group . $this->key);
     }
 
     /**
@@ -67,5 +76,34 @@ class ParsedStat
     public function setValue($value)
     {
         $this->value = $value;
+    }
+
+    public function getGranularity()
+    {
+        return $this->granularity;
+    }
+
+    /**
+     * @param mixed $granularity
+     */
+    public function setGranularity($granularity)
+    {
+        $this->granularity = $granularity;
+    }
+
+    /**
+     * @return mixed
+     */
+    public function getWindow()
+    {
+        return $this->window;
+    }
+
+    /**
+     * @param mixed $window
+     */
+    public function setWindow($window)
+    {
+        $this->window = $window;
     }
 }
