@@ -7,18 +7,16 @@ use Doctrine\ODM\MongoDB\DocumentManager;
 
 class GraphManager
 {
-    const GRAN_DAYS = 'days';
-    const GRAN_DAYS_INCLUSIVE = 'daysInclusive';
-    const GRAN_MINUTES = 'minutes';
-    const GRAN_MINUTES_INCLUSIVE = 'minutesInclusive';
-
-    const WINDOW_MINUTE = 60;
-    const WINDOW_HOUR = 3600;
-    const WINDOW_DAY = 86400;
-    const WINDOW_YEAR = 1314000;
+    const MINUTE = 60;
+    const HOUR = 3600;
+    const DAY = 86400;
+    const YEAR = 31536000;
 
     /** @var DocumentManager */
     private $documentManager;
+
+    private $window = self::DAY;
+    private $granularity = self::MINUTE;
 
     /**
      * @param DocumentManager $documentManager
@@ -31,7 +29,7 @@ class GraphManager
     /**
      * @param $group
      * @param $aggregateResults
-     * @return array
+     * @return ParsedStat[]
      */
     public function parseAggregate($group, $aggregateResults)
     {
@@ -43,11 +41,7 @@ class GraphManager
                 $key = json_encode($result['_id']);
             }
 
-            $parsed[] = array(
-                'group' => $group,
-                'key' => $key,
-                'value' => $result['count'],
-            );
+            $parsed[] = new ParsedStat($group, $key, $result['count']);
         }
         return $parsed;
     }
@@ -56,95 +50,128 @@ class GraphManager
      * @param $group
      * @param $key
      * @param $value
-     * @return array
+     * @return ParsedStat[]
      */
     public function parseSimpleKeyValue($group, $key, $value)
     {
         $parsed = array(
-            array(
-                'group' => $group,
-                'key' => $key,
-                'value' => $value,
-            )
+            new ParsedStat($group, $key, $value)
         );
 
         return $parsed;
     }
 
     /**
-     * @param array $parsedStat A single parsed stat array
-     * @param int $window The time windows within which to treat multiple inserts as the same
-     * @param string $granularity The granularity which to store statistics in the document
+     * @param ParsedStat $parsedStat A single parsed stat
      * @return bool
      * @throws \Exception
      */
-    public function insertWindowStat($parsedStat, $window = 86400, $granularity = self::GRAN_DAYS_INCLUSIVE)
+    public function insertStat(ParsedStat $parsedStat)
     {
-        $statKey = 'stats';
+        $this->assertGranularityIsMoreThanWindow();
+        $this->assertWindowIsDivisibleByGranularity();
 
-        $granularityLengths = array(
-            self::GRAN_DAYS_INCLUSIVE => 86400,
-            self::GRAN_DAYS => 86400,
-            self::GRAN_MINUTES => 60,
-            self::GRAN_MINUTES_INCLUSIVE => 60
-        );
+        $currentSegment = $this->getTimeSegment($this->granularity);
+        $timeWindow = $this->getTimeSegment($this->window);
 
-        if ($granularityLengths[$granularity] >= $window) {
-            throw new \Exception('Window MUST be more than the granularity');
-        }
-
-        $yearEpoch = strtotime('jan 1 ' . date('Y'));
-        $year = (string)date('Y');
-        $month = (string)date('n');
-        $day = (string)date('j');
-        $dayOfYear = (string)date('z');
-        $hour = (string)date('G');
-        $minute = (string)date('i');
-
-        switch ($granularity) {
-            case self::GRAN_DAYS_INCLUSIVE:
-                $statKey .= ".$year.$month.$day";
-                break;
-            case self::GRAN_DAYS:
-                $statKey .= ".$dayOfYear";
-                break;
-            case self::GRAN_MINUTES:
-                $statKey .= ".$minute";
-                break;
-            case self::GRAN_MINUTES_INCLUSIVE:
-                $statKey .= ".$year.$month.$day.$hour.$minute";
-                break;
-        }
-
-        $timeWindow = $this->getTimeWindow($window);
+        $humanGranularity = $this->getHumanTimeIncrement($this->granularity);
+        $humanWindow = $this->getHumanTimeIncrement($this->window);
 
         $this->documentManager->createQueryBuilder('Bigtallbill\MongoGraphModel\Graph')
             ->update()
             ->upsert(true)
-            ->field('granularity')->equals($granularity)
-            ->field('window')->equals($window)
-            ->field('group')->equals($parsedStat['group'])
-            ->field('key')->equals($parsedStat['key'])
+            ->field('granularity')->equals($this->granularity)
+            ->field('granularity_human')->set($humanGranularity)
+            ->field('window')->equals($this->window)
+            ->field('window_human')->equals($humanWindow)
+            ->field('group')->equals($parsedStat->getGroup())
+            ->field('key')->equals($parsedStat->getKey())
             ->field('date')->equals(new \MongoDate($timeWindow))
-            ->field($statKey)->set($parsedStat['value'])
+            ->field("segments.$currentSegment")->set($parsedStat->getValue())
             ->getQuery()
             ->execute();
     }
 
     /**
-     * @return \Doctrine\ODM\MongoDB\DocumentRepository
+     * @param int $window
+     * @return $this
      */
-    private function getRepository()
+    public function setWindow($window)
     {
-        return $this->documentManager->getRepository('Bigtallbill\MongoGraphModel\Graph');
+        $this->window = $window;
+        return $this;
     }
 
     /**
-     * @param $window
+     * @param string $granularity
+     * @return $this
+     */
+    public function setGranularity($granularity)
+    {
+        $this->granularity = $granularity;
+        return $this;
+    }
+
+    /**
+     * Gets the human representation of the given number of seconds
+     *
+     * e.g 60 = Minute, 3600 = Hour ect (Up to Year)
+     *
+     * @param int $inputSeconds
+     * @return null|string
+     */
+    protected function getHumanTimeIncrement($inputSeconds)
+    {
+        $humanGranularity = null;
+
+        $years = $inputSeconds / self::YEAR;
+        $days = $inputSeconds / self::DAY;
+        $hours = floor($inputSeconds / self::HOUR);
+        $minutes = floor(($inputSeconds / 60) % 60);
+        $seconds = $inputSeconds % 60;
+
+        if ($years >= 1) {
+            $humanGranularity = 'Year';
+            return $humanGranularity;
+        } elseif ($days >= 1) {
+            $humanGranularity = 'Day';
+            return $humanGranularity;
+        } elseif ($hours >= 1) {
+            $humanGranularity = 'Hour';
+            return $humanGranularity;
+        } elseif ($minutes >= 1) {
+            $humanGranularity = 'Minute';
+            return $humanGranularity;
+        } elseif ($seconds >= 1) {
+            $humanGranularity = 'Second';
+            return $humanGranularity;
+        }
+        return $humanGranularity;
+    }
+
+    protected function assertWindowIsDivisibleByGranularity()
+    {
+        $remainder = $this->window % $this->granularity;
+        if ($remainder !== 0) {
+            throw new \Exception('the given window is not evenly divisible by the given granularity');
+        }
+    }
+
+    protected function assertGranularityIsMoreThanWindow()
+    {
+        if ($this->granularity >= $this->window) {
+            throw new \Exception('Window MUST be more than the granularity');
+        }
+    }
+
+    /**
+     * Given a window of time in seconds, gets the current timestamp to the current segment
+     *
+     * @param int $windowSeconds
      * @return float
      */
-    protected function getTimeWindow($window)
+    protected function getTimeSegment($windowSeconds)
     {
-        return floor(time() / $window) * $window;
+        return floor(time() / $windowSeconds) * $windowSeconds;
     }
 }
