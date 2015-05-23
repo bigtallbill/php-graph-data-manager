@@ -15,19 +15,16 @@ class ParsedStat
     private $group;
     private $key;
     private $value;
+    private $method;
 
-    public function __construct($window, $granularity, $group, $key, $value)
+    public function __construct($method, $window, $granularity, $group, $key, $value)
     {
         $this->group = $group;
         $this->key = $key;
         $this->value = $value;
         $this->window = $window;
         $this->granularity = $granularity;
-    }
-
-    public function getUniqueHash()
-    {
-        return md5($this->window . $this->granularity . $this->group . $this->key);
+        $this->method = $method;
     }
 
     /**
@@ -105,5 +102,13 @@ class ParsedStat
     public function setWindow($window)
     {
         $this->window = $window;
+    }
+
+    /**
+     * @return mixed
+     */
+    public function getMethod()
+    {
+        return $this->method;
     }
 }

@@ -37,20 +37,25 @@ while(true) {
 
     $parsed = array();
 
-    $gm->setGranularity(GraphManager::MINUTE)->setWindow(GraphManager::HOUR);
+    $gm->setGranularity(GraphManager::MINUTE)->setWindow(GraphManager::HOUR)->setIncremental(false);
     $parsed = array_merge($gm->parseSimpleKeyValue('system_stats', 'cpu', rand(25, 50)), $parsed);
     $parsed = array_merge($gm->parseSimpleKeyValue('system_stats', 'mem', rand(64000, 128000)), $parsed);
     $parsed = array_merge($gm->parseSimpleKeyValue('system_stats', 'processes', rand(1240, 64000)), $parsed);
 
-    $gm->setGranularity(GraphManager::HOUR)->setWindow(GraphManager::DAY);
+    $gm->setGranularity(GraphManager::HOUR)->setWindow(GraphManager::DAY)->setIncremental(false);
     $parsed = array_merge($gm->parseSimpleKeyValue('system_stats', 'cpu', rand(25, 50)), $parsed);
     $parsed = array_merge($gm->parseSimpleKeyValue('system_stats', 'mem', rand(64000, 128000)), $parsed);
     $parsed = array_merge($gm->parseSimpleKeyValue('system_stats', 'processes', rand(1240, 64000)), $parsed);
+
+    $gm->setGranularity(GraphManager::MINUTE)
+        ->setWindow(GraphManager::HOUR)
+        ->setIncremental(true);
+    $parsed = array_merge($gm->parseSimpleKeyValue('card_views', md5(rand(1,3)), 1), $parsed);
 
     $gm->insertMultiple($parsed);
 
     var_dump(md5(rand(0, PHP_INT_MAX)));
-    sleep(60);
+    sleep(1);
 }
 
 

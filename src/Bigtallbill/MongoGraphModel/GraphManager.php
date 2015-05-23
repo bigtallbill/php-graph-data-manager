@@ -12,11 +12,16 @@ class GraphManager
     const DAY = 86400;
     const YEAR = 31536000;
 
+    const METHOD_SET = 'set';
+    const METHOD_INC = 'inc';
+
     /** @var DocumentManager */
     private $documentManager;
 
     private $window = self::DAY;
     private $granularity = self::MINUTE;
+
+    private $incremental = false;
 
     /**
      * @param DocumentManager $documentManager
@@ -41,7 +46,7 @@ class GraphManager
                 $key = json_encode($result['_id']);
             }
 
-            $parsed[] = new ParsedStat($this->window, $this->granularity, $group, $key, $result['count']);
+            $parsed[] = new ParsedStat(($this->incremental) ? self::METHOD_INC : self::METHOD_SET, $this->window, $this->granularity, $group, $key, $result['count']);
         }
         return $parsed;
     }
@@ -55,7 +60,7 @@ class GraphManager
     public function parseSimpleKeyValue($group, $key, $value)
     {
         $parsed = array(
-            new ParsedStat($this->window, $this->granularity, $group, $key, $value)
+            new ParsedStat(($this->incremental) ? self::METHOD_INC : self::METHOD_SET, $this->window, $this->granularity, $group, $key, $value)
         );
 
         return $parsed;
@@ -87,19 +92,25 @@ class GraphManager
         $humanGranularity = $this->getHumanTimeIncrement($parsedStat->getGranularity());
         $humanWindow = $this->getHumanTimeIncrement($parsedStat->getWindow());
 
-        $this->documentManager->createQueryBuilder('Bigtallbill\MongoGraphModel\Graph')
-            ->update()
+        $queryBuilder = $this->documentManager->createQueryBuilder('Bigtallbill\MongoGraphModel\Graph');
+        $queryBuilder->update()
             ->upsert(true)
+            ->field('method')->equals($parsedStat->getMethod())
             ->field('granularity')->equals($parsedStat->getGranularity())
             ->field('granularity_human')->set($humanGranularity)
             ->field('window')->equals($parsedStat->getWindow())
             ->field('window_human')->equals($humanWindow)
             ->field('group')->equals($parsedStat->getGroup())
             ->field('key')->equals($parsedStat->getKey())
-            ->field('date')->equals(new \MongoDate($timeWindow))
-            ->field("segments.$currentSegment")->set($parsedStat->getValue())
-            ->getQuery()
-            ->execute();
+            ->field('date')->equals(new \MongoDate($timeWindow));
+
+        if ($parsedStat->getMethod() === self::METHOD_INC) {
+            $queryBuilder->field("segments.$currentSegment")->inc($parsedStat->getValue());
+        } else {
+            $queryBuilder->field("segments.$currentSegment")->set($parsedStat->getValue());
+        }
+
+        $queryBuilder->getQuery()->execute();
     }
 
     /**
@@ -183,5 +194,13 @@ class GraphManager
     protected function getTimeSegment($windowSeconds)
     {
         return floor(time() / $windowSeconds) * $windowSeconds;
+    }
+
+    /**
+     * @param boolean $incremental
+     */
+    public function setIncremental($incremental)
+    {
+        $this->incremental = $incremental;
     }
 }
