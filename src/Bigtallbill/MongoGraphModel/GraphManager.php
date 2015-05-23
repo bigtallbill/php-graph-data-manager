@@ -198,9 +198,11 @@ class GraphManager
 
     /**
      * @param boolean $incremental
+     * @return $this
      */
     public function setIncremental($incremental)
     {
         $this->incremental = $incremental;
+        return $this;
     }
 }
