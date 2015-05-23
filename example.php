@@ -32,9 +32,26 @@ $dm = DocumentManager::create($connection, $config);
 
 $gm = new GraphManager($dm);
 
-$parsed = $gm->parseSimpleKeyValue('top', 'cpu', 25);
-foreach ($parsed as $stat) {
-    $gm->insertWindowStat($stat, 60, GraphManager::GRAN_MINUTES);
+
+while(true) {
+
+    $parsed = array();
+
+    $gm->setGranularity(GraphManager::MINUTE)->setWindow(GraphManager::HOUR);
+    $parsed = array_merge($gm->parseSimpleKeyValue('system_stats', 'cpu', rand(25, 50)), $parsed);
+    $parsed = array_merge($gm->parseSimpleKeyValue('system_stats', 'mem', rand(64000, 128000)), $parsed);
+    $parsed = array_merge($gm->parseSimpleKeyValue('system_stats', 'processes', rand(1240, 64000)), $parsed);
+
+    $gm->setGranularity(GraphManager::HOUR)->setWindow(GraphManager::DAY);
+    $parsed = array_merge($gm->parseSimpleKeyValue('system_stats', 'cpu', rand(25, 50)), $parsed);
+    $parsed = array_merge($gm->parseSimpleKeyValue('system_stats', 'mem', rand(64000, 128000)), $parsed);
+    $parsed = array_merge($gm->parseSimpleKeyValue('system_stats', 'processes', rand(1240, 64000)), $parsed);
+
+    $gm->insertMultiple($parsed);
+
+    var_dump(md5(rand(0, PHP_INT_MAX)));
+    sleep(60);
 }
+
 
 
