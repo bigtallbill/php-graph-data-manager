@@ -3,7 +3,7 @@
     "description": "A data model for storing incremental data for graphs",
     "require": {
         "php": ">=5.3",
-        "doctrine/doctrine-mongo-odm-module": "0.8.*"
+        "doctrine/doctrine-mongo-odm-module": "0.9.*"
     },
     "require-dev": {
         "phpunit/phpunit": "~4.6"
